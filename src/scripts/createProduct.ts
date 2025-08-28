@@ -160,15 +160,15 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (productResponse.body?.data?.productCreate?.userErrors?.length > 0) {
+    if (productResponse.body?.data?.productSet?.userErrors?.length > 0) {
       console.error(
         "❌ Product creation errors:",
-        productResponse.body.data.productCreate.userErrors
+        productResponse.body.data.productSet.userErrors
       );
       return;
     }
 
-    const createdProduct = productResponse.body?.data?.productCreate?.product;
+    const createdProduct = productResponse.body?.data?.productSet?.product;
     if (!createdProduct) {
       console.error("❌ No product returned from creation");
       console.log("Response:", JSON.stringify(productResponse, null, 2));
