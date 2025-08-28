@@ -6,8 +6,16 @@ interface ProductOutput {
   title: string;
   handle: string;
   status: string;
+  description?: string;
+  productType?: string;
+  vendor?: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
+  media?: any[];
+  variants: any[];
+  options?: any[];
+  metafields?: any[];
 }
 
 function extractProductInfo(product: ShopifyProduct): ProductOutput {
@@ -16,8 +24,16 @@ function extractProductInfo(product: ShopifyProduct): ProductOutput {
     title: product.title,
     handle: product.handle,
     status: product.status,
+    description: product.description,
+    productType: product.productType,
+    vendor: product.vendor,
+    tags: product.tags,
     createdAt: product.createdAt,
-    updatedAt: product.updatedAt
+    updatedAt: product.updatedAt,
+    media: product.media,
+    variants: product.variants,
+    options: product.options,
+    metafields: product.metafields
   };
 }
 
@@ -42,7 +58,7 @@ async function main(): Promise<void> {
 
     const products = await client.getAllProducts();
 
-    if (products.length === 0) {
+    if (!products || products.length === 0) {
       console.log('❌ No products found in the store.');
       return;
     }
@@ -59,9 +75,12 @@ async function main(): Promise<void> {
 
     allProductInfo.sort((a, b) => a.title.localeCompare(b.title));
 
-    allProductInfo.forEach(({ title, status }) => {
-      console.log(`${title.padEnd(40)} ${status.padEnd(10)}`);
-    });
+    // Output only the first product as JSON
+    if (allProductInfo.length > 0) {
+      console.log(JSON.stringify(allProductInfo[0], null, 2));
+    } else {
+      console.log('No products found');
+    }
 
     console.log('='.repeat(80));
     console.log(`Total products: ${products.length}`);
