@@ -335,9 +335,70 @@ export class ShopifyClient {
 
       const client = new this.shopify.clients.Graphql({ session });
 
+      const imageInput = {
+        filename: "product-image.jpg",
+        mimeType: "image/jpeg",
+        resource: "IMAGE",
+        httpMethod: "POST",
+      };
+
+      const imageMutation = `
+      mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
+        stagedUploadsCreate(input: $input) {
+          stagedTargets {
+            url
+            resourceUrl
+            parameters {
+              name
+              value
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }`;
+
+      const imageVariables = {
+        input: [imageInput],
+      };
+      const imageResponse = await client.request(imageMutation, {
+        variables: imageVariables,
+      });
+
+      if (
+        imageResponse.data.stagedUploadsCreate.userErrors &&
+        imageResponse.data.stagedUploadsCreate.userErrors.length > 0
+      ) {
+        console.error(
+          "Staged upload errors:",
+          imageResponse.data.stagedUploadsCreate.userErrors
+        );
+        throw new Error("Failed to create staged upload");
+      }
+
+      console.log(imageResponse.data.stagedUploadsCreate.stagedTargets);
+
+      const imageUrls =
+        imageResponse.data.stagedUploadsCreate.stagedTargets.map(
+          (target: any) => target.resourceUrl
+        );
+      const mediaFiles = imageUrls.map((url: string) => ({
+        contentType: "IMAGE",
+        originalSource: url,
+      }));
+
+      mediaFiles.push({
+        contentType: "EXTERNAL_VIDEO",
+        originalSource:
+          "https://player.vimeo.com/video/862073812?badge=0&autopause=0&player_id=0&app_id=58479",
+      });
+
       const input = {
         title: productData.title,
         descriptionHtml: productData.description,
+        files: mediaFiles,
         productOptions: [
           {
             name: "Title",
@@ -346,11 +407,11 @@ export class ShopifyClient {
               {
                 name: "Default Title",
               },
-            ]            
+            ],
           },
         ],
         variants: [
-          { 
+          {
             optionValues: [
               {
                 optionName: "Title",
@@ -359,33 +420,36 @@ export class ShopifyClient {
             ],
             price: productData.price,
             taxable: false,
-            sku: productData.metafields.find((metafield: any) => metafield.key === "minkeeper_number")?.value,
+            sku: productData.metafields.find(
+              (metafield: any) => metafield.key === "minkeeper_number"
+            )?.value,
             inventoryItem: {
               tracked: true,
               measurement: {
                 weight: {
                   value: productData.weight,
-                  unit: "GRAMS"
-                }
-              }
+                  unit: "GRAMS",
+                },
+              },
             },
             inventoryQuantities: [
               {
                 locationId: "gid://shopify/Location/74448765091",
                 name: "available",
-                quantity: 1
-              }
-            ]
+                quantity: 1,
+              },
+            ],
           },
         ],
-          ...(productData.metafields && productData.metafields.length > 0 && {
+        ...(productData.metafields &&
+          productData.metafields.length > 0 && {
             metafields: productData.metafields.map((metafield: any) => ({
               namespace: metafield.namespace,
               key: metafield.key,
               value: metafield.value,
-              type: metafield.type
-            }))
-          })
+              type: metafield.type,
+            })),
+          }),
       };
 
       const variables = {
