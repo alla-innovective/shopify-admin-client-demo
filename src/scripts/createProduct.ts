@@ -136,25 +136,15 @@ async function main(): Promise<void> {
     // Product data with literal values from the example
     const productData = {
       title: "ELBAITE with Cleavelandite and Lepidolite",
-      productType: "Minerals",
-      vendor: "Mineral Collection",
-      status: "ACTIVE",
+      price: "1000.00",
+      weight: 20,
       metafields: metafieldsData,
+      description: "Stunning miniature tourmaline"
     };
-
-    console.log("📦 Creating product...");
-    console.log(
-      "Product data being sent:",
-      JSON.stringify(productData, null, 2)
-    );
 
     let productResponse;
     try {
       productResponse = await client.createProduct(productData);
-      console.log(
-        "GraphQL Response:",
-        JSON.stringify(productResponse, null, 2)
-      );
     } catch (error) {
       console.error("❌ GraphQL Error:", error);
       return;
@@ -168,7 +158,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const createdProduct = productResponse.body?.data?.productSet?.product;
+    const createdProduct = productResponse.data?.productSet?.product;
     if (!createdProduct) {
       console.error("❌ No product returned from creation");
       console.log("Response:", JSON.stringify(productResponse, null, 2));

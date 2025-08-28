@@ -337,26 +337,45 @@ export class ShopifyClient {
 
       const input = {
         title: productData.title,
+        descriptionHtml: productData.description,
         productOptions: [
           {
-            name: "Any",
+            name: "Title",
             position: 1,
             values: [
               {
-                name: "Default",
+                name: "Default Title",
               },
-            ],
+            ]            
           },
         ],
         variants: [
           { 
             optionValues: [
               {
-                optionName: "Any",
-                name: "Default",
+                optionName: "Title",
+                name: "Default Title",
               },
             ],
-            price: "1000.00"
+            price: productData.price,
+            taxable: false,
+            sku: productData.metafields.find((metafield: any) => metafield.key === "minkeeper_number")?.value,
+            inventoryItem: {
+              tracked: true,
+              measurement: {
+                weight: {
+                  value: productData.weight,
+                  unit: "GRAMS"
+                }
+              }
+            },
+            inventoryQuantities: [
+              {
+                locationId: "gid://shopify/Location/74448765091",
+                name: "available",
+                quantity: 1
+              }
+            ]
           },
         ],
           ...(productData.metafields && productData.metafields.length > 0 && {
@@ -377,6 +396,7 @@ export class ShopifyClient {
         mutation createProduct($productSet: ProductSetInput!) {
           productSet(input: $productSet) {
               product {
+                id
                 title
                 variants(first: 1) {
                   nodes {
