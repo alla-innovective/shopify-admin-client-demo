@@ -326,6 +326,10 @@ export class ShopifyClient {
     return allProducts;
   }
 
+  // Create a product with its default variant, all metadata, images uploaded to a staged upload and Vimeo video added from original source
+  // Includes inventory quantities for the UK location
+  // This is a test function to illustrate the process and GraphQL queries and should be adapted to multiple media, actual inventory location ids, better error handling etc.
+  
   async createProduct(productData: any): Promise<any> {
     try {
       const session = {
@@ -335,11 +339,14 @@ export class ShopifyClient {
 
       const client = new this.shopify.clients.Graphql({ session });
 
+      // Creates a signed URL for uploading the image to Shopify's staged upload GCP location
+      // The filename is not the file you are uploading but rather the filename which will be used to upload the data to the GCP location
+
       const imageInput = {
-        filename: "product-image.jpg",
+        filename: "image.jpg",
         mimeType: "image/jpeg",
         resource: "IMAGE",
-        httpMethod: "POST",
+        httpMethod: "PUT",
       };
 
       const imageMutation = `
@@ -378,7 +385,9 @@ export class ShopifyClient {
         throw new Error("Failed to create staged upload");
       }
 
-      console.log(imageResponse.data.stagedUploadsCreate.stagedTargets);
+      // Uploads the image to the signed URL GCP location
+      // The file path here  is the path to the file you are uploading
+      await this.uploadFileToStagedUpload("image.jpg", imageResponse);
 
       const imageUrls =
         imageResponse.data.stagedUploadsCreate.stagedTargets.map(
@@ -389,10 +398,11 @@ export class ShopifyClient {
         originalSource: url,
       }));
 
+      // Adds a video as a Vimeo-hosted video. No need to upload the video, just use the original source URL
       mediaFiles.push({
         contentType: "EXTERNAL_VIDEO",
         originalSource:
-          "https://player.vimeo.com/video/862073812?badge=0&autopause=0&player_id=0&app_id=58479",
+          "https://player.vimeo.com/video/1093648744?autoplay=1&byline=0&controls=1&loop=1&playsinline=1&title=0",
       });
 
       const input = {
@@ -412,6 +422,7 @@ export class ShopifyClient {
         ],
         variants: [
           {
+            // Use "Title" and "Default Title" **exactly** to ensure the variant is created as the default variant in Shopify
             optionValues: [
               {
                 optionName: "Title",
@@ -420,6 +431,8 @@ export class ShopifyClient {
             ],
             price: productData.price,
             taxable: false,
+
+            // SKU is the same as the minkeeper_number metafield
             sku: productData.metafields.find(
               (metafield: any) => metafield.key === "minkeeper_number"
             )?.value,
@@ -434,7 +447,14 @@ export class ShopifyClient {
             },
             inventoryQuantities: [
               {
+                // This is the UK stock in the **test** store. 
+                // For the production import you will need to the **live** store location ids for UK, US and Munich
                 locationId: "gid://shopify/Location/74448765091",
+
+                // For initial imports we use "available" inventory.
+                // When synchronising inventory between Shopify and MinKeeper, if products are sold, reserved or in transit in MinKeeper,
+                // other inventory quantity names must be used to update inventory.
+                // See https://shopify.dev/docs/apps/build/orders-fulfillment/inventory-management-apps#inventory-states for more details
                 name: "available",
                 quantity: 1,
               },
@@ -482,114 +502,51 @@ export class ShopifyClient {
       console.error("Error creating product with productSet:", error);
       throw error;
     }
-  }
+  }  
 
-  async addExternalVideoToProduct(
-    productId: string,
-    videoUrl: string,
-    altText?: string
-  ): Promise<any> {
+    async uploadFileToStagedUpload(
+    filePath: string,
+    stagedUploadResponse: any
+  ): Promise<void> {
     try {
-      const session = {
-        accessToken: this.config.accessToken,
-        shop: `${this.config.storeName}.myshopify.com`,
-      };
+      const fs = require('fs');
+      const path = require('path');
+      
+      const fileBuffer = fs.readFileSync(filePath);
+      const fileName = path.basename(filePath);
+      
+      const stagedTarget = stagedUploadResponse.data.stagedUploadsCreate.stagedTargets[0];
+    
+      if (!stagedTarget) {
+        throw new Error("No staged upload target found in response");
+      }
+      
+      const aclParam = stagedTarget.parameters.find((param: any) => param.name === 'acl');
+      const contentTypeParam = stagedTarget.parameters.find((param: any) => param.name === 'content_type');
 
-      const client = new this.shopify.clients.Graphql({ session });
-
-      const mutation = `
-        mutation {
-          productCreateMedia(
-            media: [{
-              mediaContentType: EXTERNAL_VIDEO,
-              originalSource: "${videoUrl}",
-              alt: "${altText || "Product video"}"
-            }],
-            productId: "${productId}"
-          ) {
-            media {
-              id
-              mediaContentType
-              ... on ExternalVideo {
-                id
-                embedUrl
-                host
-              }
-            }
-            mediaUserErrors {
-              field
-              message
-            }
-          }
-        }
-      `;
-
-      const response = await client.query({
-        data: mutation,
+      const uploadUrl = stagedTarget.url;
+    
+      const response = await fetch(uploadUrl, {
+        // PUT is used to upload smaller files to the GCP location.
+        // You MUST use PUT here, otherwise the signature on the presigned URL will not match
+        method: 'PUT',
+        // Only these two headers are required, everything else is included in the presigned URL
+        headers: {
+          'content_type': contentTypeParam?.value,
+          'acl': aclParam
+        },
+        body: fileBuffer
       });
-
-      // Check for GraphQL errors
-      if (
-        response.errors &&
-        response.errors.graphQLErrors &&
-        response.errors.graphQLErrors.length > 0
-      ) {
-        console.error("GraphQL Errors:");
-        response.errors.graphQLErrors.forEach((error: any, index: number) => {
-          console.error(`  Error ${index + 1}:`);
-          console.error(`    Message: ${error.message}`);
-          if (error.locations) {
-            console.error(`    Locations: ${JSON.stringify(error.locations)}`);
-          }
-          if (error.path) {
-            console.error(`    Path: ${JSON.stringify(error.path)}`);
-          }
-          if (error.extensions) {
-            console.error(
-              `    Extensions: ${JSON.stringify(error.extensions)}`
-            );
-          }
-        });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Upload failed with status ${response.status}: ${errorText}`);
       }
-
-      return response;
-    } catch (error: any) {
-      console.error("Error adding external video to product:", error);
-
-      // Handle the specific error structure
-      if (error.body && error.body.errors) {
-        console.error(
-          "Network Status Code:",
-          error.body.errors.networkStatusCode
-        );
-        console.error("Error Message:", error.body.errors.message);
-
-        if (
-          error.body.errors.graphQLErrors &&
-          error.body.errors.graphQLErrors.length > 0
-        ) {
-          console.error("GraphQL Errors:");
-          error.body.errors.graphQLErrors.forEach(
-            (graphQLError: any, index: number) => {
-              console.error(`  Error ${index + 1}:`);
-              console.error(`    Message: ${graphQLError.message}`);
-              if (graphQLError.locations) {
-                console.error(
-                  `    Locations: ${JSON.stringify(graphQLError.locations)}`
-                );
-              }
-              if (graphQLError.path) {
-                console.error(`    Path: ${JSON.stringify(graphQLError.path)}`);
-              }
-              if (graphQLError.extensions) {
-                console.error(
-                  `    Extensions: ${JSON.stringify(graphQLError.extensions)}`
-                );
-              }
-            }
-          );
-        }
-      }
+      
+      console.log(`File ${fileName} uploaded successfully`);
+      
+    } catch (error) {
+      console.error("Error uploading file to staged upload:", error);
       throw error;
     }
   }
