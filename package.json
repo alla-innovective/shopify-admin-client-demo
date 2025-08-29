@@ -7,8 +7,7 @@
     "build": "tsc",
     "products": "ts-node src/scripts/getProducts.ts",
     "create-product": "ts-node src/scripts/createProduct.ts",
-    "test-auth": "ts-node src/scripts/testAuth.ts",
-    "add-video": "ts-node src/scripts/addVideoToProduct.ts"
+    "test-auth": "ts-node src/scripts/testAuth.ts"
   },
   "keywords": [
     "shopify",
