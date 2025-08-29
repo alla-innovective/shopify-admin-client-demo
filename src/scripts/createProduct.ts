@@ -168,6 +168,30 @@ async function main(): Promise<void> {
     console.log("✅ Product created successfully:", createdProduct.title);
     console.log("Product ID:", createdProduct.id);
 
+    // Publish the product to the online store, Shop and POS
+    const publications = [
+        {
+          publicationId: "gid://shopify/Publication/154328137891", // Online Store in dev
+          publishDate: "2025-08-29T00:00:00Z"
+        },
+        {
+          publicationId: "gid://shopify/Publication/154328203427", // POS in dev
+          publishDate: "2025-08-29T00:00:00Z"
+        },
+        {
+          publicationId: "gid://shopify/Publication/154328268963", // Shop (Shopify marketplace) in dev
+          publishDate: "2025-08-29T00:00:00Z"
+        }
+    ]
+    const publishProductResponse = await client.publishProduct(createdProduct.id, publications);
+    if (publishProductResponse.body?.data?.productSet?.userErrors?.length > 0) {
+      console.error(
+        "❌ Product publication errors:",
+        publishProductResponse.body.data.productSet.userErrors
+      );
+      return;
+    }
+
     console.log("\n🎉 Product copy creation completed!");
     console.log(
       "Product URL:",

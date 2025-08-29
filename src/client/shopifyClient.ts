@@ -502,7 +502,45 @@ export class ShopifyClient {
       console.error("Error creating product with productSet:", error);
       throw error;
     }
-  }  
+  }
+
+  async publishProduct(productId: string, publications: any[]): Promise<any> {
+    try {
+      const session = {
+        accessToken: this.config.accessToken,
+        shop: `${this.config.storeName}.myshopify.com`,
+      };
+
+      const client = new this.shopify.clients.Graphql({ session });
+
+      const mutation = `
+        mutation publishProduct($id: ID!, $input: [PublicationInput!]!) {
+          publishablePublish(id: $id, input: $input) {
+            publishable {
+              availablePublicationsCount {
+                count
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      const variables = {
+        id: productId,
+        input: publications,
+      };
+
+      const response = await client.request(mutation, { variables });
+      return response;
+    } catch (error: any) {
+      console.error("Error publishing product:", error);
+      throw error;
+    }
+}
 
     async uploadFileToStagedUpload(
     filePath: string,
